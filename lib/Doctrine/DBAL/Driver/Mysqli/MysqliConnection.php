@@ -20,6 +20,7 @@
 namespace Doctrine\DBAL\Driver\Mysqli;
 
 use Doctrine\DBAL\Driver\Connection as Connection;
+use Doctrine\DBAL\Driver\LastInsertId;
 use Doctrine\DBAL\Driver\PingableConnection;
 use Doctrine\DBAL\Driver\ServerInfoAwareConnection;
 
@@ -40,9 +41,9 @@ class MysqliConnection implements Connection, PingableConnection, ServerInfoAwar
     private $_conn;
 
     /**
-     * @var string
+     * @var LastInsertId
      */
-    private $lastInsertId = '0';
+    private $lastInsertId;
 
     /**
      * @param array  $params
@@ -83,6 +84,8 @@ class MysqliConnection implements Connection, PingableConnection, ServerInfoAwar
         if (isset($params['charset'])) {
             $this->_conn->set_charset($params['charset']);
         }
+
+        $this->lastInsertId = new LastInsertId();
     }
 
     /**
@@ -122,7 +125,7 @@ class MysqliConnection implements Connection, PingableConnection, ServerInfoAwar
      */
     public function prepare($prepareString)
     {
-        return new MysqliStatement($this->_conn, $prepareString);
+        return new MysqliStatement($this->_conn, $prepareString, $this->lastInsertId);
     }
 
     /**
@@ -155,6 +158,8 @@ class MysqliConnection implements Connection, PingableConnection, ServerInfoAwar
             throw new MysqliException($this->_conn->error, $this->_conn->sqlstate, $this->_conn->errno);
         }
 
+        $this->lastInsertId->set((string) $this->_conn->insert_id);
+
         return $this->_conn->affected_rows;
     }
 
@@ -163,13 +168,7 @@ class MysqliConnection implements Connection, PingableConnection, ServerInfoAwar
      */
     public function lastInsertId($name = null)
     {
-        // The last insert ID is reset to "0" after a non-insert query,
-        // therefore we keep the previously set insert ID locally.
-        if ($this->_conn->insert_id) {
-            $this->lastInsertId = (string) $this->_conn->insert_id;
-        }
-
-        return $this->lastInsertId;
+        return $this->lastInsertId->get();
     }
 
     /**

@@ -289,7 +289,15 @@ class PostgreSqlSchemaManager extends AbstractSchemaManager
             $sequenceName = $sequence['relname'];
         }
 
-        $data = $this->_conn->fetchAll('SELECT min_value, increment_by FROM ' . $this->_platform->quoteIdentifier($sequenceName));
+        $version = floatval($this->_conn->getWrappedConnection()->getServerVersion());
+
+        if ($version >= 10) {
+            $data = $this->_conn->fetchAll('SELECT min_value, increment_by FROM pg_sequences WHERE schemaname = \'public\' AND sequencename = '.$this->_conn->quote($sequenceName));
+        }
+        else
+        {
+            $data = $this->_conn->fetchAll('SELECT min_value, increment_by FROM ' . $this->_platform->quoteIdentifier($sequenceName));
+        }
 
         return new Sequence($sequenceName, $data[0]['increment_by'], $data[0]['min_value']);
     }
@@ -352,71 +360,71 @@ class PostgreSqlSchemaManager extends AbstractSchemaManager
         $tableColumn['comment'] = $this->removeDoctrineTypeFromComment($tableColumn['comment'], $type);
 
         switch ($dbType) {
-            case 'smallint':
-            case 'int2':
-                $tableColumn['default'] = $this->fixVersion94NegativeNumericDefaultValue($tableColumn['default']);
-                $length = null;
-                break;
-            case 'int':
-            case 'int4':
-            case 'integer':
-                $tableColumn['default'] = $this->fixVersion94NegativeNumericDefaultValue($tableColumn['default']);
-                $length = null;
-                break;
-            case 'bigint':
-            case 'int8':
-                $tableColumn['default'] = $this->fixVersion94NegativeNumericDefaultValue($tableColumn['default']);
-                $length = null;
-                break;
-            case 'bool':
-            case 'boolean':
-                if ($tableColumn['default'] === 'true') {
-                    $tableColumn['default'] = true;
-                }
+        case 'smallint':
+        case 'int2':
+            $tableColumn['default'] = $this->fixVersion94NegativeNumericDefaultValue($tableColumn['default']);
+            $length = null;
+            break;
+        case 'int':
+        case 'int4':
+        case 'integer':
+            $tableColumn['default'] = $this->fixVersion94NegativeNumericDefaultValue($tableColumn['default']);
+            $length = null;
+            break;
+        case 'bigint':
+        case 'int8':
+            $tableColumn['default'] = $this->fixVersion94NegativeNumericDefaultValue($tableColumn['default']);
+            $length = null;
+            break;
+        case 'bool':
+        case 'boolean':
+            if ($tableColumn['default'] === 'true') {
+                $tableColumn['default'] = true;
+            }
 
-                if ($tableColumn['default'] === 'false') {
-                    $tableColumn['default'] = false;
-                }
+            if ($tableColumn['default'] === 'false') {
+                $tableColumn['default'] = false;
+            }
 
-                $length = null;
-                break;
-            case 'text':
-                $fixed = false;
-                break;
-            case 'varchar':
-            case 'interval':
-            case '_varchar':
-                $fixed = false;
-                break;
-            case 'char':
-            case 'bpchar':
-                $fixed = true;
-                break;
-            case 'float':
-            case 'float4':
-            case 'float8':
-            case 'double':
-            case 'double precision':
-            case 'real':
-            case 'decimal':
-            case 'money':
-            case 'numeric':
-                $tableColumn['default'] = $this->fixVersion94NegativeNumericDefaultValue($tableColumn['default']);
+            $length = null;
+            break;
+        case 'text':
+            $fixed = false;
+            break;
+        case 'varchar':
+        case 'interval':
+        case '_varchar':
+            $fixed = false;
+            break;
+        case 'char':
+        case 'bpchar':
+            $fixed = true;
+            break;
+        case 'float':
+        case 'float4':
+        case 'float8':
+        case 'double':
+        case 'double precision':
+        case 'real':
+        case 'decimal':
+        case 'money':
+        case 'numeric':
+            $tableColumn['default'] = $this->fixVersion94NegativeNumericDefaultValue($tableColumn['default']);
 
-                if (preg_match('([A-Za-z]+\(([0-9]+)\,([0-9]+)\))', $tableColumn['complete_type'], $match)) {
-                    $precision = $match[1];
-                    $scale = $match[2];
-                    $length = null;
-                }
-                break;
-            case 'year':
+            if (preg_match('([A-Za-z]+\(([0-9]+)\,([0-9]+)\))', $tableColumn['complete_type'], $match)) {
+                $precision = $match[1];
+                $scale = $match[2];
                 $length = null;
-                break;
+            }
+            break;
+        case 'year':
+            $length = null;
+            break;
 
             // PostgreSQL 9.4+ only
-            case 'jsonb':
-                $jsonb = true;
-                break;
+        case 'jsonb':
+            $jsonb = true;
+            break;
         }
 
         if ($tableColumn['default'] && preg_match("('([^']+)'::)", $tableColumn['default'], $match)) {
@@ -434,8 +442,8 @@ class PostgreSqlSchemaManager extends AbstractSchemaManager
             'unsigned'      => false,
             'autoincrement' => $autoincrement,
             'comment'       => isset($tableColumn['comment']) && $tableColumn['comment'] !== ''
-                ? $tableColumn['comment']
-                : null,
+            ? $tableColumn['comment']
+            : null,
         ];
 
         $column = new Column($tableColumn['field'], Type::getType($type), $options);
